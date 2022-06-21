@@ -100,7 +100,7 @@ func runner(command string, parallelism int, csvfile string, fixedargs []string,
 				}
 
 				buf := bufio.NewReader(stdout)
-				first_line := true
+				count := 0
 				for ;; {
 					line, _, err := buf.ReadLine()
 					if err != nil {
@@ -109,15 +109,13 @@ func runner(command string, parallelism int, csvfile string, fixedargs []string,
 						}
 						break
 					}
-					if first_line {
-						result := fullarglist[0]
-						for _, arg := range fullarglist[1:] {
-							result = fmt.Sprintf("%v, %v", result, arg) 
-						}
-						result = fmt.Sprintf("%v, %v", result, string(line))
-						output_channel <- result
-						first_line = false
+					result := fullarglist[0]
+					for _, arg := range fullarglist[1:] {
+						result = fmt.Sprintf("%v, %v", result, arg) 
 					}
+					result = fmt.Sprintf("%v, %d, %v", result, count, string(line))
+					output_channel <- result
+					count += 1
 				}
 
 				err = cmd.Wait()
