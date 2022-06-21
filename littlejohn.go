@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
+	"io"
+	"bufio"
 	"log"
 	"os"
 	"os/exec"
@@ -26,12 +28,30 @@ func openCSV(filename string) (*csv.Reader, []string, error) {
 	return reader, argnames, nil
 }
 
-func runner(command string, parallelism int, csvfile string, fixedargs []string) error {
+func runner(command string, parallelism int, csvfile string, fixedargs []string, outputfile string) error {
 
 	argreader, argnames, err := openCSV(csvfile)
 	if err != nil {
 		return fmt.Errorf("failed to open CSV file: %w", err)
 	}
+
+	var output io.Writer = os.Stdout
+	if outputfile != "" {
+		f, err := os.Create(outputfile)
+		if err != nil {
+			return fmt.Errorf("Failed to open output file: %w", err)
+		}
+		defer f.Close()
+		output = f
+	}
+
+	output_channel := make(chan string, 1)
+	go func() {
+		for ;; {
+			res := <- output_channel
+			output.Write([]byte(res + "\n"))
+		}
+	}()
 
 	distribution := make(chan []string, parallelism)
 
@@ -64,14 +84,40 @@ func runner(command string, parallelism int, csvfile string, fixedargs []string)
 				cmd := &exec.Cmd{
 					Path: command,
 					Args: fullarglist,
-					Stdout: os.Stdout,
 					Stderr: os.Stderr,
 				}
+				stdout, err := cmd.StdoutPipe()
+				if err != nil {
+					log.Printf("Failed to get output pipe for %v: %v", fullarglist, err)
+					continue
+				}
+				defer stdout.Close()
 
-				err := cmd.Start()
+				err = cmd.Start()
 				if err != nil {
 					log.Printf("Failed to run %v: %v", fullarglist, err)
 					continue
+				}
+
+				buf := bufio.NewReader(stdout)
+				first_line := true
+				for ;; {
+					line, _, err := buf.ReadLine()
+					if err != nil {
+						if err != io.EOF {
+							log.Printf("Error reading process %v: %v", fullarglist, err)
+						}
+						break
+					}
+					if first_line {
+						result := fullarglist[0]
+						for _, arg := range fullarglist[1:] {
+							result = fmt.Sprintf("%v, %v", result, arg) 
+						}
+						result = fmt.Sprintf("%v, %v", result, string(line))
+						output_channel <- result
+						first_line = false
+					}
 				}
 
 				err = cmd.Wait()
@@ -106,15 +152,16 @@ func main() {
 	fmt.Printf("Assembling the merry tasks...\n")
 
 	app := cli.App("littlejohn", "Run the same command with argument management")
-	app.Spec = "[-j] -c PROG -- [ARGS...]"
+	app.Spec = "[-jo] -c PROG -- [ARGS...]"
 
 	parallelism := app.IntOpt("j", 4, "Number of parallel copies to run")
 	csv := app.StringOpt("c csv", "", "File with CSV arguments for program")
 	command := app.StringArg("PROG", "", "Program to run")
+	output := app.StringOpt("o outputfile", "", "File to write output to")
 	args := app.StringsArg("ARGS", nil, "Fixed arguments to all child programs")
 
 	app.Action = func() {
-		runner(*command, *parallelism, *csv, *args)
+		runner(*command, *parallelism, *csv, *args, *output)
 	}
 
 	app.Run(os.Args)
