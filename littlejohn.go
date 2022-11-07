@@ -1,13 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"encoding/csv"
 	"fmt"
 	"io"
-	"bufio"
 	"log"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/jawher/mow.cli"
@@ -20,9 +21,15 @@ func openCSV(filename string) (*csv.Reader, []string, error) {
     }
     reader := csv.NewReader(file)
 
-	argnames, err := reader.Read()
+	raw_argnames, err := reader.Read()
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// for the arguments, strip any extraneous spaces
+	argnames := make([]string, len(raw_argnames))
+	for idx, value := range raw_argnames {
+		argnames[idx] = strings.TrimSpace(value)
 	}
 
 	return reader, argnames, nil
@@ -111,7 +118,7 @@ func runner(command string, parallelism int, csvfile string, fixedargs []string,
 					}
 					result := fullarglist[0]
 					for _, arg := range fullarglist[1:] {
-						result = fmt.Sprintf("%v, %v", result, arg) 
+						result = fmt.Sprintf("%v, %v", result, arg)
 					}
 					result = fmt.Sprintf("%v, %d, %v", result, count, string(line))
 					output_channel <- result
@@ -128,7 +135,7 @@ func runner(command string, parallelism int, csvfile string, fixedargs []string,
 		}()
 	}
 
-	// push data into the distribution channel - should be 
+	// push data into the distribution channel - should be
 	// limited in pace based on how fast the workers drain the channel
 	for {
 		args, err := argreader.Read()
