@@ -35,7 +35,7 @@ func openCSV(filename string) (*csv.Reader, []string, error) {
 	return reader, argnames, nil
 }
 
-func runner(command string, parallelism int, csvfile string, fixedargs []string, outputfile string) error {
+func runner(command string, parallelism int, dryrun bool, csvfile string, fixedargs []string, outputfile string) error {
 
 	argreader, argnames, err := openCSV(csvfile)
 	if err != nil {
@@ -86,6 +86,11 @@ func runner(command string, parallelism int, csvfile string, fixedargs []string,
 				for argindex := 0; argindex < len(args); argindex += 1 {
 					fullarglist = append(fullarglist, argnames[argindex])
 					fullarglist = append(fullarglist, args[argindex])
+				}
+
+				if dryrun {
+					fmt.Printf("%s\n", strings.Join(fullarglist, " "))
+					continue
 				}
 
 				cmd := &exec.Cmd{
@@ -157,16 +162,17 @@ func main() {
 	fmt.Printf("Assembling the merry tasks...\n")
 
 	app := cli.App("littlejohn", "Run the same command with argument management")
-	app.Spec = "[-jo] -c PROG -- [ARGS...]"
+	app.Spec = "[-jno] -c PROG -- [ARGS...]"
 
 	parallelism := app.IntOpt("j", 4, "Number of parallel copies to run")
+	dryrun := app.BoolOpt("n dry-run", false, "Just print out commands rather than run")
 	csv := app.StringOpt("c csv", "", "File with CSV arguments for program")
 	command := app.StringArg("PROG", "", "Program to run")
 	output := app.StringOpt("o outputfile", "", "File to write output to")
 	args := app.StringsArg("ARGS", nil, "Fixed arguments to all child programs")
 
 	app.Action = func() {
-		runner(*command, *parallelism, *csv, *args, *output)
+		runner(*command, *parallelism, *dryrun, *csv, *args, *output)
 	}
 
 	app.Run(os.Args)
