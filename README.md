@@ -1,6 +1,10 @@
 # littlejohn
 
-littlejohn is a small tool to let you run a simple command line tool in parallel. If you have a command of the form:
+littlejohn is a small tool to let you run a simple command line tool in parallel driven by a CSV file - so great for data-science type tasks where you need to run a command many times, once per item in a data-set.
+
+## Usage
+
+If you have a command of the form:
 
 ```
 $ /bin/myprogram arg1 --arg2 foo --arg3 bar --arg4 wibble
